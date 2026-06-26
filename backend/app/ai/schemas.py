@@ -57,11 +57,22 @@ class PatientContext(BaseModel):
 
 # ── Final Response ───────────────────────────────────────────────────────────
 
+class Citation(BaseModel):
+    document: str = Field(..., description="Document source or file name")
+    page: Optional[int] = Field(None, description="Page number of the citation")
+    chunk_index: Optional[int] = Field(None, description="Internal chunk index")
+
 class MedicalResponse(BaseModel):
     intent: str = Field(..., description="Classified intent")
     response: str = Field(..., description="AI-generated healthcare response")
     agents_used: List[str] = Field(default_factory=list, description="Agents that participated")
     emergency_level: Optional[str] = Field(None, description="Emergency level if assessed")
+    
+    # RAG Citations
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Confidence in the response based on retrieved evidence")
+    sources: List[Citation] = Field(default_factory=list, description="Citations from the knowledge base used for this response")
+    evidence_summary: Optional[str] = Field(None, description="Brief summary of the evidence used")
+
     disclaimer: str = Field(
         default=(
             "⚠️ This information is for educational purposes only and does not constitute "

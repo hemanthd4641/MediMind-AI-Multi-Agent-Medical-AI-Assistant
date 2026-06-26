@@ -16,15 +16,18 @@ logger = structlog.get_logger(__name__)
 _crew = MedicalCrew()
 
 
+from sqlalchemy.orm import Session
+
 class MedicalAIService:
     """Facade over the MedicalCrew – the only public AI interface."""
 
-    async def process_request(self, message: str, user_id: str) -> MedicalResponse:
+    async def process_request(self, message: str, user_id: str, db: Session | None = None) -> MedicalResponse:
         """Process a user message through the full AI pipeline.
 
         Args:
             message: The raw user message.
             user_id: Authenticated user ID (for logging / future memory).
+            db: Database session.
 
         Returns:
             A structured MedicalResponse ready for the API.
@@ -35,7 +38,7 @@ class MedicalAIService:
         logger.info("MedicalAIService.process_request", user_id=user_id, message_preview=message[:80])
 
         try:
-            response = await _crew.run(message)
+            response = await _crew.run(message, db=db)
             return response
         except RuntimeError as exc:
             logger.error("AI pipeline error", user_id=user_id, error=str(exc))

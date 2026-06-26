@@ -15,3 +15,12 @@ crewai>=0.30.0
 langchain-community>=0.0.31
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
+# Phase 4 - RAG
+pgvector>=0.2.1
+sentence-transformers>=2.7.0
+pymupdf>=1.24.1
+unstructured>=0.13.0
+tiktoken>=0.7.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+python-multipart>=0.0.9

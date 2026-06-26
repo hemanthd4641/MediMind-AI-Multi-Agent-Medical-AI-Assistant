@@ -17,6 +17,9 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["AI Chat"])
 
 
+from backend.app.database import get_db
+from sqlalchemy.orm import Session
+
 @router.post(
     "/chat",
     response_model=MedicalResponse,
@@ -26,6 +29,7 @@ router = APIRouter(prefix="/api/ai", tags=["AI Chat"])
 async def ai_chat(
     request: ChatRequest,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> MedicalResponse:
     """
     Process a user message through the full AI pipeline.
@@ -40,5 +44,6 @@ async def ai_chat(
     response = await medical_ai_service.process_request(
         message=request.message,
         user_id=user_id,
+        db=db,
     )
     return response

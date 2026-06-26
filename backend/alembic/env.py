@@ -18,7 +18,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from backend.app.models import user, patient_profile, refresh_token
+from backend.app.models import user, patient_profile, refresh_token, rag_models
 
 target_metadata = user.Base.metadata  # assuming all share same Base
 

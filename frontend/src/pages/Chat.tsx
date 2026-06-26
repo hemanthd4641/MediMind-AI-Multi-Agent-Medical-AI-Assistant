@@ -1,6 +1,12 @@
 // src/pages/Chat.tsx
 import React, { useState, useRef, useEffect } from 'react';
 
+interface Citation {
+  document: string;
+  page?: number | null;
+  chunk_index?: number | null;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'ai';
@@ -9,6 +15,9 @@ interface Message {
   agents_used?: string[];
   emergency_level?: string | null;
   loading?: boolean;
+  confidence?: number;
+  sources?: Citation[];
+  evidence_summary?: string | null;
 }
 
 const EMERGENCY_HIGH = ['HIGH', 'CRITICAL'];
@@ -128,6 +137,9 @@ const Chat: React.FC = () => {
         intent: data.intent,
         agents_used: data.agents_used || [],
         emergency_level: data.emergency_level,
+        confidence: data.confidence,
+        sources: data.sources || [],
+        evidence_summary: data.evidence_summary,
       };
 
       setMessages(prev => prev.filter(m => m.id !== 'loading').concat(aiMsg));
@@ -260,6 +272,39 @@ const Chat: React.FC = () => {
               {msg.agents_used && msg.agents_used.length > 0 && (
                 <div style={{ marginTop: '6px' }}>
                   {msg.agents_used.map(a => <AgentBadge key={a} name={a} />)}
+                </div>
+              )}
+              {/* RAG Citations */}
+              {msg.role === 'ai' && !msg.loading && msg.sources && msg.sources.length > 0 && (
+                <div style={{
+                  marginTop: '12px', padding: '10px',
+                  background: 'rgba(0,0,0,0.15)', borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  fontSize: '12px', color: '#94a3b8'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontWeight: 600, color: '#e2e8f0' }}>📚 Evidence Found</span>
+                    {msg.confidence !== undefined && (
+                      <span style={{ 
+                        color: msg.confidence > 0.7 ? '#4ade80' : msg.confidence > 0.4 ? '#facc15' : '#ef4444' 
+                      }}>
+                        {Math.round(msg.confidence * 100)}% Match
+                      </span>
+                    )}
+                  </div>
+                  {msg.evidence_summary && (
+                    <div style={{ marginBottom: '8px', fontStyle: 'italic' }}>
+                      {msg.evidence_summary}
+                    </div>
+                  )}
+                  <ul style={{ margin: 0, paddingLeft: '16px', listStyleType: 'disc' }}>
+                    {msg.sources.map((src, idx) => (
+                      <li key={idx} style={{ marginBottom: '4px' }}>
+                        <span style={{ color: '#bae6fd' }}>{src.document}</span>
+                        {src.page !== undefined && src.page !== null && ` (Page ${src.page})`}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
