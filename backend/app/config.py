@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # AI / Groq settings
+    GROQ_API_KEY: str = Field(..., env='GROQ_API_KEY')
+    DEFAULT_MODEL: str = Field(default='llama-3.3-70b-versatile', env='DEFAULT_MODEL')
+    LLM_TEMPERATURE: float = Field(default=0.2, env='LLM_TEMPERATURE')
+    MAX_ITERATIONS: int = Field(default=3, env='MAX_ITERATIONS')
+
     # Additional optional settings (allow extra to avoid validation errors)
     API_V1_STR: str = Field('/api/v1', env='API_V1_STR')
 
