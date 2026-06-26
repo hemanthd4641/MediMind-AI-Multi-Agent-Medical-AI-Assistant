@@ -24,5 +24,13 @@ class Settings(BaseSettings):
         env_file = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
         env_file_encoding = "utf-8"
 
+    @property
+    def DATABASE_URL(self) -> str:
+        """Construct SQLAlchemy database URL from components."""
+        return (
+            f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
 # Singleton instance
 settings = Settings()
