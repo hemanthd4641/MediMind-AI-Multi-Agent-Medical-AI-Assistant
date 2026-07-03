@@ -1,0 +1,8 @@
+from backend.app.config import settings
+
+EMBEDDING_PROVIDER = settings.EMBEDDING_PROVIDER
+EMBEDDING_MODEL = settings.EMBEDDING_MODEL
+DEVICE = settings.DEVICE
+BATCH_SIZE = 32
+HF_API_TIMEOUT = settings.HF_API_TIMEOUT
+HF_MAX_RETRIES = settings.HF_MAX_RETRIES

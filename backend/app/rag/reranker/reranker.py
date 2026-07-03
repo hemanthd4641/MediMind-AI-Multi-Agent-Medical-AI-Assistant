@@ -1,8 +1,11 @@
 import numpy as np
 from typing import List, Dict, Any
 from sklearn.metrics.pairwise import cosine_similarity
-from backend.app.rag.embedder.embedding_service import embedding_service
+from backend.app.embeddings.service import embedding_service
+import structlog
 import re
+
+logger = structlog.get_logger(__name__)
 
 class Reranker:
     """
@@ -35,16 +38,12 @@ class Reranker:
     def rerank(cls, query: str, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if not chunks:
             return []
-
-        # Re-compute cosine similarity to get exact scores
-        query_emb = np.array(embedding_service.embed_text(query)).reshape(1, -1)
-        chunk_texts = [c["content"] for c in chunks]
-        chunk_embs = np.array(embedding_service.embed_texts(chunk_texts))
+            
+        logger.info("Reranking chunks", count=len(chunks))
         
-        similarities = cosine_similarity(query_emb, chunk_embs)[0]
-
-        for i, chunk in enumerate(chunks):
-            sim_score = float(similarities[i])
+        for chunk in chunks:
+            # chunk["similarity"] already contains the Pinecone cosine similarity score
+            sim_score = chunk.get("similarity", 0.0)
             kw_score = cls.score_keyword_overlap(query, chunk["content"])
             med_score = cls.score_medical_relevance(chunk["content"])
             

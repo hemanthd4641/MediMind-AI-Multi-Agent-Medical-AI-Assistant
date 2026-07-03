@@ -114,8 +114,9 @@ const Chat: React.FC = () => {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || '';
-      const res = await fetch('/api/ai/chat', {
+      const token = localStorage.getItem('token') || '';
+      
+      const res = await fetch('http://localhost:8000/api/ai/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

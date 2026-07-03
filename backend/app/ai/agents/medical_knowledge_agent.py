@@ -1,4 +1,4 @@
-"""Medical Knowledge Agent – retrieves evidence from pgvector and answers grounded medical questions via Groq."""
+"""Medical Knowledge Agent – retrieves evidence from Pinecone and answers grounded medical questions via Groq."""
 from __future__ import annotations
 
 import time

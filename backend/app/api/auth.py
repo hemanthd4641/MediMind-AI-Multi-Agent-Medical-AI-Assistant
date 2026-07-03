@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
+
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
@@ -6,7 +7,7 @@ from .. import deps
 from ..services.auth_service import AuthService
 from ..schemas.token import TokenResponse
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 class RegisterRequest(BaseModel):
     full_name: str = Field(..., min_length=1)
@@ -39,13 +40,18 @@ def login(request: LoginRequest, db: Session = Depends(deps.get_db)):
     return TokenResponse(**tokens)
 
 @router.post("/refresh")
-def refresh(refresh_token: str = Depends(), db: Session = Depends(deps.get_db)):
+def refresh(refresh_token: str = Body(...), db: Session = Depends(deps.get_db)):
     # The refresh token is expected in the request body as plain string
     service = AuthService(db)
     return service.refresh_access_token(refresh_token)
 
 @router.post("/logout")
-def logout(refresh_token: str, db: Session = Depends(deps.get_db)):
+def logout(refresh_token: str = Body(...), db: Session = Depends(deps.get_db)):
     service = AuthService(db)
     service.revoke_refresh_token(refresh_token)
     return {"detail": "Logged out"}
+
+
+@router.get("/me")
+def get_me(current_user: dict = Depends(deps.get_current_user)):
+    return current_user

@@ -1,11 +1,14 @@
 import structlog
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
-from backend.app.models.rag_models import MedicalDocument, DocumentChunk
+from backend.app.models.rag_models import MedicalDocument
 from backend.app.rag.loader.document_loader import DocumentLoader
 from backend.app.rag.chunker.semantic_chunker import SemanticChunker
-from backend.app.rag.embedder.embedding_service import embedding_service
+from backend.app.embeddings.service import embedding_service
+from backend.app.vector_store.service import vector_store_service
+from backend.app.vector_store import config as vs_config
 import time
+import uuid
 
 logger = structlog.get_logger(__name__)
 
@@ -33,7 +36,8 @@ class IngestionPipeline:
         logger.info("Generating embeddings", total_chunks=len(chunks_data))
         t_embed = time.perf_counter()
         texts_to_embed = [c["content"] for c in chunks_data]
-        embeddings = embedding_service.embed_texts(texts_to_embed)
+        logger.info("Generating embeddings for chunks...")
+        embeddings = embedding_service.batch_embed(texts_to_embed)
         embed_time = time.perf_counter() - t_embed
         logger.info("Embeddings generated", elapsed_ms=round(embed_time * 1000))
 
@@ -47,23 +51,32 @@ class IngestionPipeline:
         self.db.add(doc)
         self.db.flush() # get doc.id
 
-        db_chunks = []
+        t_store = time.perf_counter()
+        vectors_to_upsert = []
         for i, c_data in enumerate(chunks_data):
-            db_chunk = DocumentChunk(
-                document_id=doc.id,
-                chunk_index=c_data["chunk_index"],
-                content=c_data["content"],
-                embedding=embeddings[i],
-                page_number=c_data["page_number"],
-                token_count=c_data["token_count"],
-                metadata_=c_data["metadata"]
-            )
-            db_chunks.append(db_chunk)
+            chunk_id = str(uuid.uuid4())
+            metadata = {
+                "document_id": str(doc.id),
+                "document_title": doc.title,
+                "document_source": doc.source or doc.file_name,
+                "file_name": doc.file_name,
+                "page_number": c_data.get("page_number", 1),
+                "chunk_number": i,
+                "content": c_data["content"]
+            }
+            metadata.update(c_data.get("metadata", {}))
+            
+            vectors_to_upsert.append({
+                "id": chunk_id,
+                "values": embeddings[i],
+                "metadata": metadata
+            })
 
-        self.db.add_all(db_chunks)
+        vector_store_service.upsert_batch(vectors_to_upsert, namespace=vs_config.PINECONE_NAMESPACE_MEDICAL_KNOWLEDGE)
+        
         self.db.commit()
         
         total_time = time.perf_counter() - t0
-        logger.info("Document ingestion complete", file_name=file_name, chunks=len(db_chunks), total_ms=round(total_time * 1000))
+        logger.info("Document ingestion complete", file_name=file_name, chunks=len(vectors_to_upsert), total_ms=round(total_time * 1000))
         
         return doc

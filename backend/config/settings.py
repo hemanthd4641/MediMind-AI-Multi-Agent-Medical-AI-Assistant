@@ -9,29 +9,20 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
 
     # Database settings
-    POSTGRES_USER: str = Field(..., env="POSTGRES_USER")
-    POSTGRES_PASSWORD: str = Field(..., env="POSTGRES_PASSWORD")
-    POSTGRES_DB: str = Field(..., env="POSTGRES_DB")
-    POSTGRES_HOST: str = Field(default="localhost", env="POSTGRES_HOST")
-    POSTGRES_PORT: int = Field(default=5432, env="POSTGRES_PORT")
+    DATABASE_URL: str = Field(..., env="DATABASE_URL")
 
     # JWT settings
     JWT_SECRET_KEY: str = Field(..., env="JWT_SECRET_KEY")
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
+    
+    # AI / Groq settings
+    GROQ_API_KEY: str = Field(..., env="GROQ_API_KEY")
 
     class Config:
         env_file = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
         env_file_encoding = "utf-8"
         extra = "allow"
-
-    @property
-    def DATABASE_URL(self) -> str:
-        """Construct SQLAlchemy database URL from components."""
-        return (
-            f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
 
 # Singleton instance
 settings = Settings()

@@ -188,16 +188,19 @@ def test_ai_chat_endpoint_authenticated():
         emergency_level=None,
     )
 
-    with (
-        patch("backend.app.api.ai_chat.get_current_user", return_value={"sub": "user-123", "role": "patient"}),
-        patch(
+    from backend.app.deps import get_current_user
+    fastapi_app.dependency_overrides[get_current_user] = lambda: {"sub": "user-123", "role": "patient"}
+    
+    try:
+        with patch(
             "backend.app.api.ai_chat.medical_ai_service.process_request",
             new_callable=AsyncMock,
             return_value=mock_result,
-        ),
-    ):
-        client = TestClient(fastapi_app)
-        resp = client.post("/api/ai/chat", json={"message": "Hello"})
+        ):
+            client = TestClient(fastapi_app)
+            resp = client.post("/api/ai/chat", json={"message": "Hello"})
+    finally:
+        fastapi_app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     data = resp.json()

@@ -1,9 +1,18 @@
 from fastapi.testclient import TestClient
-from backend.app import app
+from unittest.mock import patch
+from backend.main import app
 
 client = TestClient(app)
 
-def test_health_endpoint():
+@patch("backend.api.health.embedding_service.health_check")
+def test_health_endpoint(mock_health_check):
+    mock_health_check.return_value = {
+        "status": "healthy",
+        "provider": "mock",
+        "model_name": "mock",
+        "device": "cpu",
+        "api_reachability": "N/A"
+    }
     response = client.get("/health")
     assert response.status_code == 200
     json = response.json()

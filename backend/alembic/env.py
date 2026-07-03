@@ -19,8 +19,11 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 from backend.app.models import user, patient_profile, refresh_token, rag_models
+from backend.app.config import settings
 
 target_metadata = user.Base.metadata  # assuming all share same Base
+
+config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL))
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

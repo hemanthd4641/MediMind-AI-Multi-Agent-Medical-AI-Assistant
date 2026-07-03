@@ -8,7 +8,7 @@ Create Date: 2026-06-26 22:42:00.000000
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-import pgvector
+
 
 # revision identifiers, used by Alembic.
 revision = 'a1b2c3d4e5f6'
@@ -39,7 +39,6 @@ def upgrade():
         sa.Column('document_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('chunk_index', sa.Integer(), nullable=False),
         sa.Column('content', sa.Text(), nullable=False),
-        sa.Column('embedding', pgvector.sqlalchemy.Vector(384), nullable=True),
         sa.Column('page_number', sa.Integer(), nullable=True),
         sa.Column('token_count', sa.Integer(), nullable=True),
         sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),

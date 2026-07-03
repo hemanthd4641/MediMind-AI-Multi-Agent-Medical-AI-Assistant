@@ -85,6 +85,30 @@ medmind-ai/
 - **Node.js** (>=20) and **npm** (or **yarn**) for local frontend development
 - **Python** 3.12 (only needed if you run the backend outside Docker)
 
+## Phase 11: Enterprise AI Capabilities (In Progress)
+- Hybrid RAG Pipeline (BM25 + Dense)
+- PII Masking & Security
+- Prompt Experimentation Framework
+
+## Pinecone Cloud Vector Architecture
+The RAG pipeline has been refactored to use **Pinecone Cloud** as the primary vector store.
+- **Provider Abstraction**: A `VectorStore` interface decouples storage from application logic.
+- **Namespaces**: The system separates domains (e.g. `medical-knowledge`, `patient-reports`) using Pinecone namespaces to eliminate cross-contamination during retrieval.
+- **Rich Metadata**: Documents are chunks into Pinecone alongside their original text, document IDs, titles, and structural metadata for precise filtering.
+- **Monitoring**: Real-time Vector DB health and stats are available via the `VectorDatabaseDashboard` UI.
+
+**Note:** Ensure `PINECONE_API_KEY` is set in your `.env` before running document ingestion.
+
+## Multi-Provider Embedding Architecture (Refactored)
+The embedding subsystem has been refactored to use an extensible **Provider Pattern** that supports both local hardware-accelerated processing and remote Hugging Face API processing.
+- **Local Sentence Transformers (`local`)**: The default provider. The 768-dimension PyTorch model is loaded once on FastAPI startup and cached in memory. GPU (CUDA) is automatically detected and utilized if available, ensuring minimal latency and high throughput.
+- **Hugging Face Inference API (`huggingface_api`)**: An alternative lightweight provider that offloads processing to the cloud. It features built-in exponential backoff for handling rate limits and "503 Model Loading" errors.
+- **Automatic Fallback**: If `EMBEDDING_PROVIDER=local` but the system lacks sufficient RAM/VRAM or the `sentence-transformers` library fails to load, the backend will automatically and seamlessly fall back to the Hugging Face API, preventing server crashes.
+- **Configuration**: 
+  Set `EMBEDDING_PROVIDER=local` or `EMBEDDING_PROVIDER=huggingface_api` in your `.env`.
+  Set `HF_TOKEN` in your `.env` to authenticate with the Hugging Face Inference API.
+  Set `HF_API_TIMEOUT` and `HF_MAX_RETRIES` to configure API fallback resilience.
+
 ### Environment Variables
 Copy the example file and fill in the values:
 ```bash

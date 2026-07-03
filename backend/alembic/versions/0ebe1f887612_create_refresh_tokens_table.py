@@ -22,7 +22,7 @@ def upgrade():
         sa.Column('user_id', pg.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=False, index=True),
         sa.Column('token', sa.String(), nullable=False, unique=True),
         sa.Column('expires_at', sa.DateTime(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.func.utcnow()),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
     )
 
 def downgrade():

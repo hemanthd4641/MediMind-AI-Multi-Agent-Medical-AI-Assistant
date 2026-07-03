@@ -1,7 +1,15 @@
 // src/pages/Home.tsx
 import React from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const Home: React.FC = () => {
+  const { user } = useAuth();
+
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <section className="text-center py-20 bg-primary-50">
       <h1 className="text-5xl font-bold text-primary-800 mb-4">Welcome to MediMind AI</h1>

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
-from pgvector.sqlalchemy import Vector
+
 from datetime import datetime
 import uuid
 
@@ -27,9 +27,6 @@ class DocumentChunk(Base):
     document_id = Column(UUID(as_uuid=True), ForeignKey("medical_documents.id", ondelete="CASCADE"), nullable=False)
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
-    
-    # We use pgvector's Vector type. all-MiniLM-L6-v2 produces 384-dimensional embeddings.
-    embedding = Column(Vector(384))
     
     page_number = Column(Integer, nullable=True)
     token_count = Column(Integer, nullable=True)
