@@ -57,6 +57,21 @@ class VectorSearch:
                 logger.info("Chunk dropped due to low similarity score", score=score, threshold=0.65, chunk_id=match.get("id"))
                 continue
                 
+            # Validation: Verify patient_id if it was requested in the metadata filter
+            if metadata_filter and "patient_id" in metadata_filter:
+                expected_patient_id = metadata_filter["patient_id"]
+                actual_patient_id = metadata.get("patient_id")
+                if expected_patient_id and actual_patient_id and expected_patient_id != actual_patient_id:
+                    logger.warning("Patient ID mismatch - security violation", 
+                                   expected=expected_patient_id, got=actual_patient_id, chunk_id=match.get("id"))
+                    continue
+                    
+            content = metadata.get("content", "").strip()
+            # Validation: Deduplicate chunks by exact content
+            if any(r["content"].strip() == content for r in retrieved):
+                logger.info("Duplicate chunk dropped", chunk_id=match.get("id"))
+                continue
+                
             retrieved.append({
                 "chunk_id": match.get("id"),
                 "document_title": metadata.get("document_name", metadata.get("document_title", "")),
