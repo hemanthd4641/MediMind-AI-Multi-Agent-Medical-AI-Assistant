@@ -200,10 +200,13 @@ A 5-agent pipeline for longitudinal health analysis:
 - Visual trend charts with Recharts
 
 ### 🧠 RAG Knowledge Base
-- **Pinecone Cloud** vector storage with namespace isolation (`medical-knowledge`, `patient-reports`)
+- **Pinecone Cloud** vector storage with multi-namespace isolation (`medical_knowledge`, `patient_reports`, `prescriptions`, `clinical_guidelines`, etc.)
 - **Multi-provider embeddings**: Local Sentence Transformers (GPU-accelerated) with automatic fallback to Hugging Face Inference API
 - **Hybrid reranking**: 70% semantic similarity + 20% keyword overlap + 10% medical relevance
-- Document ingestion pipeline: Load → Chunk → Embed → Store with rich metadata
+- **Strict Validation Layer**: Discards hallucinated chunks using a strict minimum similarity threshold (`0.65`)
+- **Context Deduplication**: Automatically deduplicates retrieved vectors to maximize context window efficiency
+- **Patient Security Lock**: Hard-enforces `patient_id` metadata verification directly in the retrieval layer to prevent cross-patient data leakage
+- Document ingestion pipeline: Load (PyMuPDF) → Chunk → Classify Intent → Embed → Store with rich metadata
 
 ### 🛡️ AI Safety & Guardrails
 - **Input guardrails**: Prompt injection detection, unsafe medical request blocking
