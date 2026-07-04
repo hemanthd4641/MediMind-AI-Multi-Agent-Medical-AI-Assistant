@@ -30,11 +30,12 @@ class ReportAnalysisCrew:
         parameter_names = [item.get("parameter_name") for item in evaluated_items if item.get("parameter_name")]
         explanations = await self.explanation_agent.run(parameter_names)
         
+        import json
         # Merge explanations back into items
         for item in evaluated_items:
             name = item.get("parameter_name")
             if name and name in explanations:
-                item["explanation"] = explanations[name]
+                item["explanation"] = json.dumps(explanations[name])
         
         # 3. Clinical Summary
         summary_data = await self.summary_agent.run(report_type, abnormal_data, evaluated_items)

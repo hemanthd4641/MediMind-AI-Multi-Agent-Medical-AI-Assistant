@@ -59,8 +59,8 @@ class ConsultationEngine:
 
         # 3. Emergency Intercept
         if state.urgency == "emergency":
-            # Early exit for red flags
-            return state, None, "summarize"
+            # Early exit for red flags - Trigger immediate warning
+            return state, None, "emergency_warning"
 
         # 4. End Topic or Summary Request -> Move stage forward
         if intent == "exhausted":
@@ -154,9 +154,10 @@ You are a Clinical Question Planner acting as an experienced physician conductin
 Generate ONLY ONE next best unanswered clinical question to ask the patient.
 
 CRITICAL RULES:
-1. NEVER ask generic questions like "Tell me more" or "Is there anything else?". Ask specific clinical questions.
+1. NEVER ask generic questions like "Tell me more" or "Is there anything else?". You MUST ask exactly ONE clinically relevant question based on missing slots.
 2. MAXIMUM FOLLOW-UP LIMIT: Do not ask more than 1 or 2 follow-ups per category if the patient is brief. You MUST review the Completed Questions to ensure you never ask the same or similar question twice.
 3. ONE AT A TIME: Never ask compound questions (e.g., "What is the duration and severity?"). Pick exactly one slot.
+4. GRACEFUL INTERRUPTION HANDLING: If the patient abruptly changes the topic or asks a question (intent is 'asking' or 'correcting'), answer briefly if appropriate, but gracefully steer them back to the MOST IMPORTANT missing clinical slot from the active stage.
 
 PRIORITIZATION WATERFALL:
 The current consultation stage is "{state.consultation_stage}". You MUST ask questions related to this stage.

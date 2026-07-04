@@ -140,6 +140,23 @@ class MedicalAIService:
             # 5. Path D: Patient-Specific Routing (Use Consultation Engine & CrewAI)
             state, next_question, action = await _engine.process_message(user_id, message)
             
+            if action == "emergency_warning":
+                elapsed = round((time.perf_counter() - t0) * 1000)
+                flags = ", ".join(state.red_flags) if state.red_flags else "critical symptoms"
+                warning_text = (
+                    "⚠️ **EMERGENCY WARNING** ⚠️\n\n"
+                    f"Based on the symptoms you've described ({flags}), this may be a medical emergency. "
+                    "Please stop this consultation and seek **immediate medical attention** or call your local emergency services.\n\n"
+                    "*This AI cannot handle medical emergencies.*"
+                )
+                logger.warning("Emergency intercept triggered", user_id=user_id, red_flags=state.red_flags)
+                return MedicalResponse(
+                    intent=IntentType.EMERGENCY,
+                    response=warning_text,
+                    agents_used=["FastIntentRouter", "ConsultationEngine"],
+                    confidence=1.0
+                )
+
             enhanced_message = (
                 f"--- STRUCTURED CONSULTATION STATE ---\n"
                 f"{state.model_dump_json(indent=2)}\n"

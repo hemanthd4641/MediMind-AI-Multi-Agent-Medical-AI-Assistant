@@ -40,9 +40,11 @@ class PrescriptionCrew:
         # 2. Parallel-ish Tasks (We run sequentially here for safety, but they are independent)
         # 2a. Explanations
         explanations = await self.explainer.run(medicine_names)
+        import json
         # Attach explanations back to the medicines
         for m in medicines:
-            m["educational_explanation"] = explanations.get(m.get("medicine_name"), "")
+            explanation_data = explanations.get(m.get("medicine_name"), {})
+            m["educational_explanation"] = json.dumps(explanation_data) if explanation_data else ""
             
         # 2b. Interactions
         interactions = await self.interactor.run(medicine_names, patient_history, patient_chronic)
