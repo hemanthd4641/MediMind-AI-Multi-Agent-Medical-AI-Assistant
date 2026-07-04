@@ -51,6 +51,12 @@ class VectorSearch:
                                expected=namespace, got=doc_namespace, chunk_id=match.get("id"))
                 continue
                 
+            # Validation: Enforce a minimum similarity threshold to prevent hallucination
+            score = match.get("score", 0.0)
+            if score < 0.65:
+                logger.info("Chunk dropped due to low similarity score", score=score, threshold=0.65, chunk_id=match.get("id"))
+                continue
+                
             retrieved.append({
                 "chunk_id": match.get("id"),
                 "document_title": metadata.get("document_name", metadata.get("document_title", "")),

@@ -27,7 +27,7 @@ Rules for Classification:
 1. "greeting": Simple greetings (e.g., "Hello", "Hi").
 2. "general_medical_knowledge": Questions about diseases, general medical facts, biology, or conditions (e.g., "What is HIV?", "Symptoms of diabetes", "What causes dengue?"). 
 3. "symptom_consultation": The user is describing their own current symptoms and wants medical advice or a consultation (e.g., "I have a headache and fever").
-4. "medical_report_analysis": The user is asking to analyze a lab report, blood test, scan, or uploaded document (e.g., "What does my lipid profile mean?").
+4. "medical_report_analysis": The user is asking to analyze a lab report, blood test, scan, or uploaded document, OR asking for their own specific medical metrics (e.g., "What does my lipid profile mean?", "What is my total cholesterol?", "What is my blood sugar?").
 5. "prescription_analysis": The user wants you to read a prescription.
 6. "patient_history": The user is asking about their past medical history.
 7. "medication_question": The user is asking about specific drugs, their uses, side effects, or drug interactions.
