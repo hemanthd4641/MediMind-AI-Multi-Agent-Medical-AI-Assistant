@@ -8,22 +8,28 @@ from pydantic import BaseModel, Field
 # ── Intent ──────────────────────────────────────────────────────────────────
 
 class IntentType(str, Enum):
-    SYMPTOM_CHECK = "symptom_check"
-    GENERAL_MEDICAL_QUESTION = "general_medical_question"
-    REPORT_ANALYSIS = "report_analysis"
+    GREETING = "greeting"
+    GENERAL_MEDICAL_KNOWLEDGE = "general_medical_knowledge"
+    SYMPTOM_CONSULTATION = "symptom_consultation"
+    MEDICAL_REPORT_ANALYSIS = "medical_report_analysis"
     PRESCRIPTION_ANALYSIS = "prescription_analysis"
-    DRUG_INTERACTION = "drug_interaction"
-    NUTRITION = "nutrition"
-    APPOINTMENT = "appointment"
+    PATIENT_HISTORY = "patient_history"
+    MEDICATION_QUESTION = "medication_question"
+    IDENTITY_DOCUMENT_QUERY = "identity_document_query"
     EMERGENCY = "emergency"
-    CHAT = "chat"
-    MEDICAL_HISTORY = "medical_history"
+    SMALL_TALK = "small_talk"
 
 
 class IntentClassification(BaseModel):
     intent: IntentType = Field(..., description="Detected user intent")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score 0–1")
     reason: str = Field(..., description="Short explanation for the classification")
+
+
+class DocumentClassification(BaseModel):
+    document_type: str = Field(..., description="The type of the document")
+    namespace: str = Field(..., description="The Pinecone namespace for the document")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score 0-1")
 
 
 # ── Emergency ────────────────────────────────────────────────────────────────

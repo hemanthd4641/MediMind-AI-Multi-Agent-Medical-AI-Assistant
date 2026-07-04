@@ -23,20 +23,41 @@ class MedicalKnowledgeAgent:
     Answers general medical questions by first retrieving context from the vector database.
     """
 
-    async def run(self, message: str, patient_context: PatientContext | None = None, db: Session | None = None) -> Dict[str, Any]:
+    async def run(
+        self, 
+        message: str, 
+        patient_context: PatientContext | None = None, 
+        db: Session | None = None,
+        namespaces: List[str] = None,
+        metadata_filter: dict = None
+    ) -> Dict[str, Any]:
         """
         Returns a dict containing the "response" (str) and "chunks" (List[Dict]).
         """
+        # Set default namespace if None
+        from backend.app.vector_store import config as vs_config
+        if not namespaces:
+            namespaces = [vs_config.PINECONE_NAMESPACE_MEDICAL_KNOWLEDGE]
+
         t0 = time.perf_counter()
-        logger.info(f"{AGENT_NAME} started")
+        logger.info(f"{AGENT_NAME} started", namespaces=namespaces)
 
         retrieved_chunks = []
         if db:
             # 1. Retrieve raw chunks
-            raw_chunks = VectorSearch.search(db, query=message, top_k=10)
+            raw_chunks = []
+            for ns in namespaces:
+                ns_chunks = VectorSearch.search(
+                    db=db, 
+                    query=message, 
+                    top_k=5, 
+                    namespace=ns, 
+                    metadata_filter=metadata_filter
+                )
+                raw_chunks.extend(ns_chunks)
             
             # 2. Rerank
-            retrieved_chunks = Reranker.rerank(message, raw_chunks)
+            retrieved_chunks = Reranker.rerank(message, raw_chunks) if raw_chunks else []
             
             # 3. Take top 5 after reranking
             retrieved_chunks = retrieved_chunks[:5]

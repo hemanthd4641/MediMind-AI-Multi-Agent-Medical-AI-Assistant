@@ -14,28 +14,46 @@ class VectorSearch:
     """
     
     @staticmethod
-    def search(db: Session, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search(
+        db: Session, 
+        query: str, 
+        top_k: int = 5, 
+        namespace: str = vs_config.PINECONE_NAMESPACE_MEDICAL_KNOWLEDGE,
+        metadata_filter: dict = None
+    ) -> List[Dict[str, Any]]:
         """
         Embeds the query and performs a nearest-neighbor search via Pinecone.
         Returns a list of dicts representing the top-k chunks.
         """
-        logger.info("Generating query embedding", query=query)
+        import time
+        t0 = time.perf_counter()
+        
+        logger.info("Generating query embedding", query=query, namespace=namespace)
         query_embedding = embedding_service.embed_query(query)
         
-        logger.info("Querying Pinecone vector store", top_k=top_k)
+        logger.info("Querying Pinecone vector store", top_k=top_k, namespace=namespace, filter=metadata_filter)
         # Query Pinecone
         pinecone_results = vector_store_service.query(
             query_embedding=query_embedding,
             top_k=top_k,
-            namespace=vs_config.PINECONE_NAMESPACE_MEDICAL_KNOWLEDGE
+            namespace=namespace,
+            filter=metadata_filter
         )
         
         retrieved = []
         for match in pinecone_results:
-            metadata = match["metadata"]
+            metadata = match.get("metadata", {})
+            
+            # Validation: Ensure it actually belongs to the requested namespace
+            doc_namespace = metadata.get("namespace")
+            if doc_namespace and doc_namespace != namespace:
+                logger.warning("Namespace mismatch in retrieval - ignoring document", 
+                               expected=namespace, got=doc_namespace, chunk_id=match.get("id"))
+                continue
+                
             retrieved.append({
-                "chunk_id": match["id"],
-                "document_title": metadata.get("document_title", ""),
+                "chunk_id": match.get("id"),
+                "document_title": metadata.get("document_name", metadata.get("document_title", "")),
                 "document_source": metadata.get("document_source", ""),
                 "file_name": metadata.get("file_name", ""),
                 "page_number": int(metadata.get("page_number", 1)),
@@ -44,5 +62,10 @@ class VectorSearch:
                 "metadata": metadata
             })
             
-        logger.info("Vector search complete", chunks_found=len(retrieved))
+        elapsed_ms = round((time.perf_counter() - t0) * 1000)
+        logger.info("Vector search complete", 
+                    namespace=namespace,
+                    chunks_found=len(retrieved),
+                    response_time_ms=elapsed_ms)
+                    
         return retrieved

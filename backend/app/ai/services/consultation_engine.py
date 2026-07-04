@@ -8,17 +8,28 @@ from backend.app.ai.services.groq_llm_service import groq_llm_service
 
 logger = structlog.get_logger(__name__)
 
+class SymptomSlots(BaseModel):
+    onset: str = ""
+    duration: str = ""
+    severity: str = ""
+    location: str = ""
+    associated_symptoms: List[str] = Field(default_factory=list)
+    triggers: List[str] = Field(default_factory=list)
+    relieving_factors: List[str] = Field(default_factory=list)
+
 class ConsultationState(BaseModel):
     chief_complaint: str = ""
-    symptoms: Dict[str, Dict[str, str]] = Field(default_factory=dict)
+    symptoms: Dict[str, SymptomSlots] = Field(default_factory=dict)
     medical_history: List[str] = Field(default_factory=list)
     medications: List[str] = Field(default_factory=list)
     allergies: List[str] = Field(default_factory=list)
     lifestyle: Dict[str, str] = Field(default_factory=dict)
+    family_history: List[str] = Field(default_factory=list)
     completed_questions: List[str] = Field(default_factory=list)
     pending_questions: List[str] = Field(default_factory=list)
-    consultation_stage: str = "initial"
-    urgency: str = "unknown"
+    consultation_stage: str = "chief_complaint"
+    red_flags: List[str] = Field(default_factory=list)
+    urgency: str = "normal"
 
 class ConsultationStateManager:
     def __init__(self):
@@ -41,15 +52,25 @@ class ConsultationEngine:
         # 1. Intent Detection
         intent = await self._detect_intent(message, state)
 
-        # 2. Update State
+        # 2. Update State & Detect Red Flags
         if intent in ["answering", "correcting", "greeting", "asking"]: 
             state = await self._update_state(message, state)
             state_manager.save_state(user_id, state)
 
-        # 3. Slot Verification & Question Planning
+        # 3. Emergency Intercept
+        if state.urgency == "emergency":
+            # Early exit for red flags
+            return state, None, "summarize"
+
+        # 4. End Topic or Summary Request -> Move stage forward
+        if intent == "exhausted":
+            state = self._advance_stage(state)
+            state_manager.save_state(user_id, state)
+
         if intent == "requesting summary" or self._is_consultation_complete(state):
             return state, None, "summarize"
         
+        # 5. Slot Verification & Question Planning
         next_question = await self._plan_next_question(state, message, intent)
         
         if next_question:
@@ -57,11 +78,21 @@ class ConsultationEngine:
             state_manager.save_state(user_id, state)
             return state, next_question, "ask_question"
         
+        # Fallback if no questions generated but not complete
         return state, None, "summarize"
+
+    def _advance_stage(self, state: ConsultationState) -> ConsultationState:
+        """Move to the next logical stage if the user indicates they are done with the current one."""
+        stages = ["chief_complaint", "symptom_details", "medical_history", "medications", "allergies", "lifestyle", "family_history", "complete"]
+        if state.consultation_stage in stages:
+            idx = stages.index(state.consultation_stage)
+            if idx < len(stages) - 1:
+                state.consultation_stage = stages[idx + 1]
+        return state
 
     async def _detect_intent(self, message: str, state: ConsultationState) -> str:
         prompt = f"""
-Analyze the user's message in the context of a medical consultation.
+Analyze the user's message in the context of a clinical intake consultation.
 Determine the intent of the message. 
 
 Possible Intents:
@@ -70,7 +101,7 @@ Possible Intents:
 - correcting: Correcting previous information.
 - greeting: A general greeting.
 - requesting summary: Asking to summarize the consultation.
-- exhausted: The user indicates they have nothing more to add (e.g., "that's all", "nothing else", "no more", "that's it", "I don't know").
+- exhausted: The user indicates they have nothing more to add to the current topic (e.g., "that's all", "nothing else", "no more", "that's it", "I don't know").
 
 User Message: "{message}"
 
@@ -85,20 +116,13 @@ Return ONLY a JSON object with a single key "intent" and string value. Example: 
 
     async def _update_state(self, message: str, state: ConsultationState) -> ConsultationState:
         prompt = f"""
-You are a structured clinical data extractor.
+You are a highly accurate clinical data extractor.
 Update the following JSON consultation state based on the user's new message.
-Extract the new information and merge it into the existing state.
-NEVER overwrite existing information unless the user explicitly corrects it.
 
-For symptoms, each symptom in the dictionary should ideally have these slots filled:
-- duration
-- severity
-- location
-- associated symptoms
-- frequency
-- triggers
-
-If the user mentions a symptom but omits details, just leave those slots empty for that symptom.
+CRITICAL RULES:
+1. NEVER overwrite or delete existing information unless the user explicitly corrects it.
+2. For any symptom mentioned, fill in the nested slots (`onset`, `duration`, `severity`, `location`, `associated_symptoms`, `triggers`, `relieving_factors`). If a slot is not mentioned, leave it as an empty string (or empty list).
+3. RED FLAG DETECTION: If the user mentions any emergency symptoms (e.g., severe chest pain, difficulty breathing, stroke symptoms, loss of consciousness, severe bleeding, suicidal thoughts), you MUST add them to the `red_flags` list and set `urgency` to "emergency". Otherwise, leave `urgency` as "normal" or whatever it was previously.
 
 Current State:
 {state.model_dump_json(indent=2)}
@@ -108,13 +132,17 @@ User Message: "{message}"
 Return ONLY the updated JSON state matching the exact same schema. Do not include markdown formatting or extra text.
 """
         try:
-            res = await groq_llm_service.generate(prompt, system_prompt="You are a JSON state updater.", agent_name="ConsultationEngine")
+            res = await groq_llm_service.generate(prompt, system_prompt="You are a clinical state updater.", agent_name="ConsultationEngine")
             new_data = self._extract_json(res)
             
-            # Keep completed/pending questions intact to avoid LLM hallucinating them away
+            # Protect strictly managed lists
             new_data["completed_questions"] = state.completed_questions
             new_data["pending_questions"] = state.pending_questions
             
+            # Ensure safe fallback for urgency
+            if new_data.get("urgency") not in ["normal", "urgent", "emergency"]:
+                new_data["urgency"] = state.urgency
+                
             return ConsultationState(**new_data)
         except Exception as e:
             logger.error("State update failed", error=str(e))
@@ -122,23 +150,25 @@ Return ONLY the updated JSON state matching the exact same schema. Do not includ
 
     async def _plan_next_question(self, state: ConsultationState, last_message: str, intent: str) -> Optional[str]:
         prompt = f"""
-You are a Clinical Question Planner. Generate ONLY ONE next best unanswered clinical question.
+You are a Clinical Question Planner acting as an experienced physician conducting an intake.
+Generate ONLY ONE next best unanswered clinical question to ask the patient.
 
 CRITICAL RULES:
-1. NEVER ask generic questions like "Can you tell me more about that?" or "Is there anything else?". Instead, ask specific clinical questions that fill predefined slots (duration, severity, location, etc.).
-2. MAXIMUM FOLLOW-UP LIMIT: Each symptom should have at most 3 follow-up questions. Review the Completed Questions. If a symptom has already been asked about 3 times, DO NOT ask about it again. Move to the next missing slot or category.
-3. EXHAUSTED DETECTED: The user's last intent was "{intent}". If the intent is "exhausted" (e.g. they said "that's all" or "nothing else"), you MUST STOP asking about the current symptom and move to the next consultation stage (like Medical History or Medications).
-4. If no meaningful follow-up exists for any category, output an empty string "". NEVER enter an infinite loop.
+1. NEVER ask generic questions like "Tell me more" or "Is there anything else?". Ask specific clinical questions.
+2. MAXIMUM FOLLOW-UP LIMIT: Do not ask more than 1 or 2 follow-ups per category if the patient is brief. You MUST review the Completed Questions to ensure you never ask the same or similar question twice.
+3. ONE AT A TIME: Never ask compound questions (e.g., "What is the duration and severity?"). Pick exactly one slot.
 
-Prioritize filling missing information in this exact order:
-1. Chief Complaint (if empty)
-2. Symptom Details (if a symptom is missing duration, severity, location, associated symptoms, frequency, or triggers)
-3. Medical History (if empty)
-4. Medications (if empty)
-5. Allergies (if empty)
-6. Lifestyle (if empty)
+PRIORITIZATION WATERFALL:
+The current consultation stage is "{state.consultation_stage}". You MUST ask questions related to this stage.
+If the stage is "chief_complaint", ask for the main reason for their visit.
+If the stage is "symptom_details", check active `state.symptoms`. Pick one symptom and ask for missing critical slots (`onset`, `duration`, `severity`, `location`, `associated_symptoms`, `triggers`, `relieving_factors`).
+If the stage is "medical_history", ask if they have any past medical conditions.
+If the stage is "medications", ask if they are taking any medications currently.
+If the stage is "allergies", ask if they have any known allergies.
+If the stage is "lifestyle", ask briefly about smoking/alcohol or relevant lifestyle factors.
+If the stage is "family_history", ask if there are any major medical conditions running in the family.
 
-Before generating a question, verify it is NOT in the list of completed questions. Never ask the same question twice.
+CRITICAL: Do NOT ask about symptoms if the stage is medical_history. Stay strictly within the current stage.
 
 Completed Questions:
 {json.dumps(state.completed_questions)}
@@ -146,10 +176,13 @@ Completed Questions:
 Current State:
 {state.model_dump_json(indent=2)}
 
-User's Last Message: "{last_message}"
 User's Last Intent: "{intent}"
 
-Return ONLY a JSON object with a single key "next_question" containing the string question (or empty string if none). Example: {{"next_question": "How long have you had this headache?"}}
+Based on the waterfall and current state, determine the single most important missing slot and ask a natural, empathetic question for it.
+Return ONLY a JSON object with a single key "next_question" containing the string question. 
+If all essential information is collected, return an empty string "".
+
+Example: {{"next_question": "How long have you been experiencing this headache?"}}
 """
         try:
             res = await groq_llm_service.generate(prompt, system_prompt="You are a clinical question planner.", agent_name="ConsultationEngine")
@@ -159,13 +192,14 @@ Return ONLY a JSON object with a single key "next_question" containing the strin
             return ""
 
     def _is_consultation_complete(self, state: ConsultationState) -> bool:
-        if not state.chief_complaint: return False
-        if not state.symptoms: return False
+        if state.urgency == "emergency": return True
+        if state.consultation_stage == "complete": return True
         
-        # Check if basic slots for at least one symptom are somewhat filled
-        for symptom, slots in state.symptoms.items():
-            if not slots.get("duration") or not slots.get("severity"):
-                return False
+        # If we have basic history and medications, we consider it done
+        if state.chief_complaint and state.symptoms:
+            if len(state.completed_questions) > 12: 
+                return True # Hard limit
+        
         return False
 
     def _extract_json(self, text: str) -> dict:

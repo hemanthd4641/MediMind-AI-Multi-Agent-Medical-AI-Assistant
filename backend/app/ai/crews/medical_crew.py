@@ -1,12 +1,11 @@
 """
-Medical Crew – orchestrates all AI agents with dynamic routing.
+Medical Crew – orchestrates AI agents with dynamic routing.
 
 Workflow:
-  User Request
-    → Router Agent          (always runs)
-    → Patient Intake Agent  (runs for symptom/emergency/history intents)
+  User Request -> FastIntentRouter (external) -> MedicalCrew
+    → Patient Intake Agent  (runs for symptom/history/emergency intents)
     → Emergency Agent       (runs for symptom/emergency intents)
-    → Medical Knowledge     (runs for medical question/symptom/drug/nutrition intents)
+    → Medical Knowledge     (runs for RAG dependent intents)
     → Citation Agent        (runs if knowledge agent retrieves chunks)
     → Response Composer     (always runs, combines all outputs)
 """
@@ -16,7 +15,6 @@ import time
 import structlog
 from sqlalchemy.orm import Session
 
-from backend.app.ai.agents.router_agent import RouterAgent
 from backend.app.ai.agents.patient_intake_agent import PatientIntakeAgent
 from backend.app.ai.agents.emergency_detection_agent import EmergencyDetectionAgent
 from backend.app.ai.agents.medical_knowledge_agent import MedicalKnowledgeAgent
@@ -27,33 +25,34 @@ from backend.app.ai.schemas import (
     IntentClassification, IntentType,
     PatientContext, MedicalResponse, Citation
 )
+from backend.app.vector_store import config as vs_config
 
 logger = structlog.get_logger(__name__)
 
 # Intents that trigger Patient Intake
 INTAKE_INTENTS = {
-    IntentType.SYMPTOM_CHECK,
+    IntentType.SYMPTOM_CONSULTATION,
     IntentType.EMERGENCY,
-    IntentType.MEDICAL_HISTORY,
-    IntentType.DRUG_INTERACTION,
+    IntentType.PATIENT_HISTORY,
+    IntentType.MEDICATION_QUESTION,
     IntentType.PRESCRIPTION_ANALYSIS,
 }
 
 # Intents that trigger Emergency Detection
 EMERGENCY_INTENTS = {
-    IntentType.SYMPTOM_CHECK,
+    IntentType.SYMPTOM_CONSULTATION,
     IntentType.EMERGENCY,
 }
 
-# Intents that trigger Medical Knowledge
+# Intents that trigger Medical Knowledge (CrewAI-bound RAG)
 KNOWLEDGE_INTENTS = {
-    IntentType.SYMPTOM_CHECK,
-    IntentType.GENERAL_MEDICAL_QUESTION,
-    IntentType.DRUG_INTERACTION,
-    IntentType.NUTRITION,
-    IntentType.REPORT_ANALYSIS,
+    IntentType.SYMPTOM_CONSULTATION,
+    IntentType.MEDICATION_QUESTION,
+    IntentType.MEDICAL_REPORT_ANALYSIS,
     IntentType.PRESCRIPTION_ANALYSIS,
     IntentType.EMERGENCY,
+    IntentType.PATIENT_HISTORY,
+    IntentType.IDENTITY_DOCUMENT_QUERY,
 }
 
 
@@ -61,21 +60,23 @@ class MedicalCrew:
     """Orchestrates the MediMind AI multi-agent pipeline."""
 
     def __init__(self) -> None:
-        self.router = RouterAgent()
         self.intake = PatientIntakeAgent()
         self.emergency = EmergencyDetectionAgent()
         self.knowledge = MedicalKnowledgeAgent()
         self.citation = CitationAgent()
         self.composer = ResponseComposerAgent()
 
-    async def run(self, message: str, db: Session | None = None) -> MedicalResponse:
+    async def run(
+        self, 
+        message: str, 
+        intent: IntentClassification, 
+        db: Session | None = None,
+        user_id: str | None = None
+    ) -> MedicalResponse:
         t0 = time.perf_counter()
         agents_used: list[str] = []
 
-        # ── Step 1: Router (always) ──────────────────────────────────────────
-        agents_used.append("Router Agent")
-        intent: IntentClassification = await self.router.run(message)
-        logger.info("MedicalCrew routing decision", intent=intent.intent, confidence=intent.confidence)
+        logger.info("MedicalCrew execution started", intent=intent.intent, confidence=intent.confidence)
 
         # ── Step 2: Patient Intake (conditional) ─────────────────────────────
         patient_context: PatientContext | None = None
@@ -100,7 +101,26 @@ class MedicalCrew:
         
         if intent.intent in KNOWLEDGE_INTENTS:
             agents_used.append("Medical Knowledge Agent")
-            k_res = await self.knowledge.run(message, patient_context, db=db)
+            
+            # Determine namespace based on intent
+            namespaces = ["patient_reports"]
+            if intent.intent in [IntentType.MEDICATION_QUESTION, IntentType.PRESCRIPTION_ANALYSIS]:
+                namespaces = ["prescriptions"]
+            elif intent.intent == IntentType.IDENTITY_DOCUMENT_QUERY:
+                namespaces = ["identity_documents"]
+            
+            # Add patient_id to metadata_filter if querying patient-specific data
+            metadata_filter = None
+            if user_id:
+                metadata_filter = {"patient_id": user_id}
+                
+            k_res = await self.knowledge.run(
+                message=message, 
+                patient_context=patient_context, 
+                db=db,
+                namespaces=namespaces,
+                metadata_filter=metadata_filter
+            )
             knowledge_response = k_res["response"]
             
             chunks = k_res.get("chunks", [])

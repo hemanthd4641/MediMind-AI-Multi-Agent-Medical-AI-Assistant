@@ -33,10 +33,11 @@ async def upload_document(
     try:
         content = await file.read()
         pipeline = IngestionPipeline(db)
-        doc = pipeline.ingest_document(
+        doc = await pipeline.ingest_document(
             file_bytes=content,
             file_name=file.filename,
             title=file.filename,
+            user_id=user_id,
             category=category
         )
         return {"message": "Document uploaded and processed successfully", "document_id": str(doc.id)}
