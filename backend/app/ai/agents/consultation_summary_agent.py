@@ -10,6 +10,8 @@ SYSTEM_PROMPT = """You are an expert Clinical Summary Agent.
 Based on the conversation history, extracted symptoms, and urgency assessment, compile a structured clinical consultation summary.
 
 The summary should be professional, objective, and structured.
+Provide Clinical Decision Support by suggesting possible differential diagnoses, recommended specialty, and diagnostic tests.
+You MUST explicitly state that the differential diagnoses are possibilities and NOT confirmed diagnoses.
 
 You must return a valid JSON object matching this structure:
 {
@@ -22,6 +24,9 @@ You must return a valid JSON object matching this structure:
   "lifestyle_factors": "string",
   "risk_factors": ["string", "string"],
   "urgency_level": "Routine" | "Soon" | "Urgent" | "Emergency",
+  "differential_diagnoses": ["string (Possibility)", "string (Possibility)"],
+  "recommended_specialty": "string",
+  "suggested_diagnostic_tests": ["string", "string"],
   "recommended_next_steps": ["string", "string"],
   "medical_disclaimer": "This is an AI-generated summary for informational purposes only and does not constitute medical advice or a diagnosis. Please consult a qualified healthcare professional."
 }
@@ -96,6 +101,9 @@ Compile the consultation summary. Remember: ONLY output a valid JSON object.
             lifestyle_factors="N/A",
             risk_factors=[],
             urgency_level=urgency.level,
+            differential_diagnoses=[],
+            recommended_specialty="Unknown",
+            suggested_diagnostic_tests=[],
             recommended_next_steps=["Please consult a doctor directly as the summary could not be generated."],
             medical_disclaimer="This is an AI-generated summary for informational purposes only and does not constitute medical advice or a diagnosis. Please consult a qualified healthcare professional."
         )

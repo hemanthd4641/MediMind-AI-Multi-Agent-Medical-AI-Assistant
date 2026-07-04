@@ -34,6 +34,7 @@ class LLMExecution(Base):
     latency_ms = Column(Integer, default=0)
     status = Column(Enum(ExecutionStatus), default=ExecutionStatus.SUCCESS)
     error_message = Column(Text, nullable=True)
+    explainability_trace = Column(JSON, nullable=True) # Internal reasoning trace
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 class EvaluationResult(Base):

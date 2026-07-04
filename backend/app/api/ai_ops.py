@@ -42,6 +42,7 @@ def get_executions(limit: int = 50, current_user: dict = Depends(get_current_use
         "latency_ms": e.latency_ms,
         "status": e.status.value,
         "error_message": e.error_message,
+        "explainability_trace": e.explainability_trace,
         "created_at": e.created_at.isoformat()
     } for e in execs]
 

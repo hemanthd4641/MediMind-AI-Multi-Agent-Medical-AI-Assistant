@@ -24,44 +24,69 @@ import groq
 logger = structlog.get_logger(__name__)
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title="MediMind AI API", version="1.0.0")
-    
-    @app.on_event("startup")
-    async def startup_event():
-        logger.info("Starting up MediMind AI...")
-        try:
-            logger.info("Verifying Database connection...")
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            logger.info("Database connection verified successfully.")
-            
-            logger.info("Verifying Pinecone connection...")
-            pinecone_health = vector_store_service.health_check()
-            if pinecone_health["status"] != "healthy":
-                logger.warning("Pinecone vector store is not healthy on startup.", details=pinecone_health)
-            else:
-                logger.info("Pinecone connection verified successfully.")
-                
-            logger.info("Verifying Groq connection...")
-            client = groq.Groq(api_key=settings.GROQ_API_KEY)
-            client.models.list()
-            logger.info("Groq API connection verified successfully.")
+from contextlib import asynccontextmanager
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
-            # Preload the embedding model into memory on startup
-            logger.info("Preloading embedding model...")
-            embedding_health = embedding_service.health_check()
-            if embedding_health["status"] == "healthy":
-                logger.info("Embedding model preloaded successfully.", 
-                            provider=embedding_health["provider"], 
-                            model=embedding_health["model_name"], 
-                            device=embedding_health["device"])
-            else:
-                logger.error("Embedding model failed to initialize.", details=embedding_health)
-        except Exception as e:
-            logger.error("Startup verification failed", error=str(e))
-            # Failing gracefully as requested
-            pass
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting up MediMind AI...")
+    try:
+        logger.info("Verifying Database connection...")
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("Database connection verified successfully.")
+        
+        logger.info("Verifying Pinecone connection...")
+        pinecone_health = vector_store_service.health_check()
+        if pinecone_health["status"] != "healthy":
+            logger.warning("Pinecone vector store is not healthy on startup.", details=pinecone_health)
+        else:
+            logger.info("Pinecone connection verified successfully.")
+            
+        logger.info("Verifying Groq connection...")
+        client = groq.Groq(api_key=settings.GROQ_API_KEY)
+        client.models.list()
+        logger.info("Groq API connection verified successfully.")
+
+        # Preload the embedding model into memory on startup
+        logger.info("Preloading embedding model...")
+        embedding_health = embedding_service.health_check()
+        if embedding_health["status"] == "healthy":
+            logger.info("Embedding model preloaded successfully.", 
+                        provider=embedding_health["provider"], 
+                        model=embedding_health["model_name"], 
+                        device=embedding_health["device"])
+        else:
+            logger.error("Embedding model failed to initialize.", details=embedding_health)
+    except Exception as e:
+        logger.error("Startup verification failed", error=str(e))
+        # Failing gracefully as requested
+        pass
+        
+    yield
+    
+    logger.info("Shutting down MediMind AI gracefully...")
+    # Add any cleanup tasks here if needed
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="MediMind AI API", version="1.0.0", lifespan=lifespan)
+    
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        logger.error("Unhandled global exception", url=str(request.url), error=str(exc))
+        return JSONResponse(
+            status_code=500,
+            content={"message": "An unexpected internal server error occurred. Please try again later."},
+        )
+
+    @app.exception_handler(ValueError)
+    async def value_error_handler(request: Request, exc: ValueError):
+        logger.warning("ValueError encountered", url=str(request.url), error=str(exc))
+        return JSONResponse(
+            status_code=400,
+            content={"message": str(exc)},
+        )
 
     # Middleware
     app.add_middleware(cors_middleware)

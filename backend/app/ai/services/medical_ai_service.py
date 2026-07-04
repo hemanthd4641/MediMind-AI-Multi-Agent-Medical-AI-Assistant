@@ -111,7 +111,15 @@ class MedicalAIService:
                     f"Answer the user's question clearly based ONLY on the documents. If no documents match, say so."
                 )
                 
-                response_text = await groq_llm_service.generate(prompt, system_prompt="You are an AI assistant that reads identity documents.")
+                explainability_trace = {
+                    "agent": "IdentityAgent",
+                    "namespaces_searched": ["identity_documents"],
+                    "metadata_filter": {"patient_id": user_id} if user_id else None,
+                    "retrieved_chunks": [{"chunk_id": c.get("id"), "score": c.get("score"), "document_title": c.get("document_title", "Unknown")} for c in raw_chunks],
+                    "reasoning": "Retrieved identity documents for user and asked LLM to extract the answer."
+                }
+                
+                response_text = await groq_llm_service.generate(prompt, system_prompt="You are an AI assistant that reads identity documents.", db_session=db, explainability_trace=explainability_trace)
                 elapsed = round((time.perf_counter() - t0) * 1000)
                 
                 logger.info(

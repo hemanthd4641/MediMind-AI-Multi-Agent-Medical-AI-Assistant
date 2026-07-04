@@ -47,7 +47,8 @@ class GroqLLMService:
         max_retries: int = 3,
         agent_name: str = "Unknown",
         db_session = None,
-        conversation_id: str = None
+        conversation_id: str = None,
+        explainability_trace: dict = None
     ) -> str:
         """Call Groq asynchronously with retry/back-off and MLOps tracking.
 
@@ -58,6 +59,7 @@ class GroqLLMService:
             agent_name: Logical name of the agent calling this for tracking.
             db_session: Optional DB session to log the LLMExecution to.
             conversation_id: Optional UUID to group executions under one chat turn.
+            explainability_trace: Internal reasoning trace (namespace, retrieved chunks, etc.)
 
         Returns:
             The generated text content.
@@ -121,7 +123,8 @@ class GroqLLMService:
                         input_tokens=in_tokens,
                         output_tokens=out_tokens,
                         latency_ms=latency_ms,
-                        status=ExecutionStatus.SUCCESS if is_out_safe else ExecutionStatus.GUARDRAIL_BLOCKED
+                        status=ExecutionStatus.SUCCESS if is_out_safe else ExecutionStatus.GUARDRAIL_BLOCKED,
+                        explainability_trace=explainability_trace
                     )
                     db_session.add(exec_log)
                     db_session.commit()
@@ -137,39 +140,40 @@ class GroqLLMService:
             except RateLimitError as exc:
                 logger.warning("Groq rate limit hit", attempt=attempt, error=str(exc))
                 if attempt >= max_retries:
-                    self._log_failure(db_session, conversation_id, agent_name, "Groq rate limit hit", exc)
+                    self._log_failure(db_session, conversation_id, agent_name, "Groq rate limit hit", exc, explainability_trace)
                     raise RuntimeError("Groq rate limit – please retry later.") from exc
                 await asyncio.sleep(2 ** attempt)
 
             except APITimeoutError as exc:
                 logger.warning("Groq timeout", attempt=attempt, error=str(exc))
                 if attempt >= max_retries:
-                    self._log_failure(db_session, conversation_id, agent_name, "Groq timeout", exc)
+                    self._log_failure(db_session, conversation_id, agent_name, "Groq timeout", exc, explainability_trace)
                     raise RuntimeError("Groq request timed out.") from exc
                 await asyncio.sleep(2 ** attempt)
 
             except APIConnectionError as exc:
                 logger.error("Groq connection error", attempt=attempt, error=str(exc))
                 if attempt >= max_retries:
-                    self._log_failure(db_session, conversation_id, agent_name, "Groq connection error", exc)
+                    self._log_failure(db_session, conversation_id, agent_name, "Groq connection error", exc, explainability_trace)
                     raise RuntimeError("Groq is unavailable – connection error.") from exc
                 await asyncio.sleep(2 ** attempt)
 
             except Exception as exc:
                 logger.error("Groq unexpected error", attempt=attempt, error=str(exc))
-                self._log_failure(db_session, conversation_id, agent_name, "Groq unexpected error", exc)
+                self._log_failure(db_session, conversation_id, agent_name, "Groq unexpected error", exc, explainability_trace)
                 raise RuntimeError(f"Groq error: {exc}") from exc
 
         raise RuntimeError("Groq generate exhausted all retries.")
 
-    def _log_failure(self, db_session, conversation_id, agent_name, error_msg, exc):
+    def _log_failure(self, db_session, conversation_id, agent_name, error_msg, exc, explainability_trace=None):
         if db_session:
             exec_log = LLMExecution(
                 conversation_id=conversation_id,
                 agent_name=agent_name,
                 model=self.model,
                 status=ExecutionStatus.FAILED,
-                error_message=f"{error_msg}: {str(exc)}"
+                error_message=f"{error_msg}: {str(exc)}",
+                explainability_trace=explainability_trace
             )
             db_session.add(exec_log)
             db_session.commit()

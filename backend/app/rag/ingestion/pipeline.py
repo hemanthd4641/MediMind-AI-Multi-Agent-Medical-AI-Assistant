@@ -33,7 +33,7 @@ class IngestionPipeline:
             raise ValueError("No text could be extracted from the document.")
 
         # 2. Classify Document
-        first_page_text = pages[0].get("content", "")
+        first_page_text = pages[0].get("text", "")
         classification = await document_classifier_service.classify(file_name, category, first_page_text)
         logger.info("Document classified", document_type=classification.document_type, namespace=classification.namespace, confidence=classification.confidence)
         

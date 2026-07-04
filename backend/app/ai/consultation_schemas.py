@@ -50,5 +50,8 @@ class ConsultationSummary(BaseModel):
     lifestyle_factors: str = Field(description="Relevant lifestyle factors (smoking, alcohol, etc.)")
     risk_factors: List[str] = Field(description="Identified risk factors")
     urgency_level: UrgencyLevel = Field(description="Final urgency assessment")
+    differential_diagnoses: List[str] = Field(description="AI-generated differential diagnoses, clearly labeled as possibilities.")
+    recommended_specialty: str = Field(description="Recommended medical specialty for the patient to consult (e.g., Cardiology, General Practice).")
+    suggested_diagnostic_tests: List[str] = Field(description="Suggested diagnostic tests that a doctor might order.")
     recommended_next_steps: List[str] = Field(description="Recommended next steps for the patient")
     medical_disclaimer: str = Field(default="This is an AI-generated summary for informational purposes only and does not constitute medical advice or a diagnosis. Please consult a qualified healthcare professional.", description="Standard medical disclaimer")

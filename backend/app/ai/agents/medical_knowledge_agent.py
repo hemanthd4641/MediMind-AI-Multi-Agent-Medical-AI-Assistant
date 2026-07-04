@@ -96,7 +96,27 @@ class MedicalKnowledgeAgent:
         
         prompt = rag_prompt + KNOWLEDGE_USER_TEMPLATE.format(message=message, patient_context=context_str)
         
-        result_text = await groq_llm_service.generate(prompt, system_prompt=KNOWLEDGE_SYSTEM_PROMPT)
+        explainability_trace = {
+            "agent": AGENT_NAME,
+            "namespaces_searched": namespaces,
+            "metadata_filter": metadata_filter,
+            "retrieved_chunks": [
+                {
+                    "chunk_id": c.get("id"),
+                    "score": c.get("score"),
+                    "rerank_score": c.get("rerank_score"),
+                    "document_title": c.get("document_title", "Unknown")
+                } for c in retrieved_chunks
+            ],
+            "reasoning": "Retrieved medical evidence from Pinecone and passed it to the LLM for grounded generation."
+        }
+        
+        result_text = await groq_llm_service.generate(
+            prompt, 
+            system_prompt=KNOWLEDGE_SYSTEM_PROMPT,
+            db_session=db,
+            explainability_trace=explainability_trace
+        )
 
         elapsed = round((time.perf_counter() - t0) * 1000)
         logger.info(f"{AGENT_NAME} done", elapsed_ms=elapsed, chunks_used=len(retrieved_chunks))

@@ -11,8 +11,15 @@ from backend.app.embeddings import config as emb_config
 router = APIRouter()
 logger = structlog.get_logger(__name__)
 
+@router.get("/health/liveness", status_code=status.HTTP_200_OK)
+async def liveness_check():
+    """Simple liveness probe for Docker/K8s to know if the container is running."""
+    return JSONResponse(content={"status": "alive"})
+
 @router.get("/health", status_code=status.HTTP_200_OK)
-async def health_check(db: Session = Depends(get_db)):
+@router.get("/health/readiness", status_code=status.HTTP_200_OK)
+async def readiness_check(db: Session = Depends(get_db)):
+    """Deep readiness probe to ensure all backing services are reachable."""
     health_status = {
         "status": "healthy",
         "version": "1.0.0",
